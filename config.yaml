@@ -1,0 +1,72 @@
+searches:
+- keywords: AI Infrastructure Engineer
+  locations:
+  - Italy
+  - Switzerland
+  - Luxembourg
+- keywords: AI Solutions Architect
+  locations:
+  - Italy
+  - Switzerland
+  - Luxembourg
+- keywords: LLM Infrastructure Engineer
+  locations:
+  - Italy
+  - Switzerland
+  - Luxembourg
+- keywords: Inference Engineer
+  locations:
+  - Italy
+  - Switzerland
+  - Luxembourg
+- keywords: Datacenter Architect
+  locations:
+  - Italy
+  - Switzerland
+  - Luxembourg
+- keywords: Cloud Infrastructure Architect
+  locations:
+  - Italy
+  - Switzerland
+  - Luxembourg
+- keywords: Technical Presales Engineer
+  locations:
+  - Italy
+  - Switzerland
+  - Luxembourg
+- keywords: Solutions Architect (Datacenter / Hybrid Cloud)
+  locations:
+  - Italy
+  - Switzerland
+  - Luxembourg
+- keywords: Responsabile IT
+  locations:
+  - Italy
+  - Switzerland
+  - Luxembourg
+- keywords: IT Manager
+  locations:
+  - Italy
+  - Switzerland
+  - Luxembourg
+scraping:
+  results_per_query: 25
+  delay_min_seconds: 5
+  delay_max_seconds: 10
+  max_retries: 3
+  retry_delay_seconds: 60
+  fetch_details: true
+  # Archivia dopo N assenze consecutive da una ricerca con risultati.
+  absence_confirmation_runs: 2
+database:
+  path: data/jobs.db
+export:
+  format: csv
+  path: data/exports
+  filename_prefix: linkedin_jobs
+logging:
+  level: INFO
+  file: data/scraper.log
+filters:
+  include_keywords: []
+  exclude_keywords: []
