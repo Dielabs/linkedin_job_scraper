@@ -10,6 +10,7 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
 
+import yaml
 from flask import Flask, flash, redirect, render_template, request, url_for
 
 from webapp.matching import score_job
@@ -17,6 +18,7 @@ from webapp.matching import score_job
 # The DB path is anchored to the project root, independently of cwd/process manager.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATABASE_PATH = PROJECT_ROOT / "data" / "jobs.db"
+CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 PER_PAGE = 20
 MAX_PER_PAGE = 100
 SCRAPER_PID_PATH = PROJECT_ROOT / "data" / "scraper.pid"
@@ -115,22 +117,37 @@ def is_valid_linkedin_url(value: str | None) -> bool:
     return parsed.scheme in {"http", "https"} and (hostname == "linkedin.com" or hostname.endswith(".linkedin.com"))
 
 
-def job_key_from_form() -> tuple[str, str, str] | None:
-    """Return a complete logical job key submitted by a save/remove form."""
-    key = tuple(request.form.get(field, "").strip() for field in ("job_id", "search_keywords", "search_location"))
-    return key if all(key) else None
+def load_search_roles() -> list[str]:
+    """Read the configured search keywords for the role dropdown.
+
+    ``search_keywords`` nel DB e' accumulato (``" | "``-separated) quando uno
+    stesso job e' trovato da piu' query; il dropdown usa le keyword originali
+    da config.yaml e il filtro usa ``instr`` per matchare la sottostringa.
+    """
+    try:
+        with open(CONFIG_PATH) as f:
+            cfg = yaml.safe_load(f)
+        return [s["keywords"] for s in cfg.get("searches", []) if s.get("keywords")]
+    except Exception:
+        return []
+
+
+def job_id_from_form() -> str | None:
+    """Return the job_id submitted by a save/remove form."""
+    job_id = request.form.get("job_id", "").strip()
+    return job_id or None
 
 
 @app.post("/saved")
 def save_job():
-    key = job_key_from_form()
-    if key is None:
+    job_id = job_id_from_form()
+    if job_id is None:
         flash("Impossibile salvare l'annuncio: identificativo non valido.", "danger")
     else:
         try:
             with get_connection() as conn:
                 cursor = conn.execute(
-                    "UPDATE jobs SET is_saved = 1 WHERE job_id = ? AND search_keywords = ? AND search_location = ?", key
+                    "UPDATE jobs SET is_saved = 1 WHERE job_id = ?", (job_id,)
                 )
                 conn.commit()
             flash("Annuncio salvato.", "success" if cursor.rowcount else "warning")
@@ -141,14 +158,14 @@ def save_job():
 
 @app.post("/saved/remove")
 def remove_saved_job():
-    key = job_key_from_form()
-    if key is None:
+    job_id = job_id_from_form()
+    if job_id is None:
         flash("Impossibile rimuovere il salvataggio: identificativo non valido.", "danger")
     else:
         try:
             with get_connection() as conn:
                 cursor = conn.execute(
-                    "UPDATE jobs SET is_saved = 0 WHERE job_id = ? AND search_keywords = ? AND search_location = ?", key
+                    "UPDATE jobs SET is_saved = 0 WHERE job_id = ?", (job_id,)
                 )
                 conn.commit()
             flash("Annuncio rimosso dai lavori salvati.", "success" if cursor.rowcount else "warning")
@@ -172,10 +189,11 @@ def db_where(filters: dict) -> tuple[str, list[str]]:
         clauses.append("NOT (" + " OR ".join("title LIKE ? COLLATE NOCASE" for _ in filters["exclude_keywords"]) + ")")
         params.extend(f"%{term}%" for term in filters["exclude_keywords"])
     if filters["role"]:
-        clauses.append("search_keywords = ?")
+        # search_keywords e' accumulato (" | "-separated): match per sottostringa.
+        clauses.append("instr(search_keywords, ?) > 0")
         params.append(filters["role"])
     if filters["country"]:
-        clauses.append("search_location = ?")
+        clauses.append("instr(search_location, ?) > 0")
         params.append(filters["country"])
     if filters["status"] == "new":
         clauses.append("is_new = 1")
@@ -229,7 +247,7 @@ def index():
         with get_connection() as conn:
             total_db = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
             new_count = conn.execute("SELECT COUNT(*) FROM jobs WHERE is_new = 1").fetchone()[0]
-            roles = [row[0] for row in conn.execute("SELECT DISTINCT search_keywords FROM jobs WHERE search_keywords <> '' ORDER BY search_keywords COLLATE NOCASE")]
+            roles = load_search_roles()
             rows = conn.execute(f"SELECT * FROM jobs{where} ORDER BY {ORDERING[filters['sort']]}", params).fetchall()
     except sqlite3.Error as exc:
         return render_template("error.html", error=str(exc), database_path=app.config["DATABASE_PATH"]), 500

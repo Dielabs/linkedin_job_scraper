@@ -39,7 +39,7 @@ run_daily.sh                          # wrapper cron con flock
 
 - Entry point: `./venv/bin/python main.py config.yaml`.
 - `main.py` esegue tutte le combinazioni `keywords × locations` definite in `config.yaml`.
-- L'identità logica di un annuncio è `(job_id, search_keywords, search_location)`: lo stesso job trovato da query diverse può quindi avere record distinti.
+- L'identità logica di un annuncio è `job_id` (univoco per annuncio LinkedIn): lo stesso job trovato da query diverse confluisce in un **solo record**; `search_keywords` accumula le keyword che hanno trovato il job (separate da ` | `), `search_location` idem se diversa.
 - `first_seen` non deve cambiare; `last_seen` si aggiorna a ogni ritrovamento.
 - L'export è uno snapshot dell'intero DB al termine del run.
 - `fetch_details: true` migliora i dati ma rende il run più lento.
@@ -47,14 +47,15 @@ run_daily.sh                          # wrapper cron con flock
 ### Ciclo di vita degli annunci — requisito vincolante
 
 - Un annuncio appena inserito ha il badge/stato **Nuovo** (`is_new=1`). Quando viene ritrovato in un run successivo, perde il tag (`is_new=0`).
-- Un annuncio assente deve essere **eliminato fisicamente dal DB**, non archiviato, dopo `scraping.absence_confirmation_runs` assenze consecutive valide nello stesso scope query/Paese (valore attuale: `2`).
+- Un annuncio assente deve essere **eliminato fisicamente dal DB**, non archiviato, dopo `scraping.absence_confirmation_runs` assenze consecutive valide a livello **globale** (valore attuale: `2`): un annuncio resta finché è trovato da almeno una query del run; sparisce solo se non è trovato da NESSUNA query dopo N run (`db.reconcile_global` in `storage/database.py`).
 - Una ricerca fallita, rate-limited o senza card valide/non vuota affidabile **non deve** incrementare le assenze né eliminare annunci.
 - Stato da verificare prima di lavorare: il codice presente potrebbe ancora applicare la vecchia semantica di soft archive (`is_active=0`, filtro “Archiviati”). Se così fosse, è una discrepanza con il requisito sopra: adeguare database, riconciliazione, export e WebGUI coerentemente quando si interviene su questa area; evitare che record inattivi restino nel DB.
 
 ### WebGUI
 
 - `GET /`: lettura, filtri, paginazione, ordinamento e score CV.
-- Salvataggio annunci: il flag persistente `jobs.is_saved` e le rotte `POST /saved`, `POST /saved/remove` alimentano `GET /saved` (pagina “Lavori salvati”). Il salvataggio è legato alla stessa chiave logica `(job_id, search_keywords, search_location)` e non protegge dalla cancellazione: se la riconciliazione elimina l’annuncio dopo le assenze confermate, sparisce anche dai salvati.
+- Salvataggio annunci: il flag persistente `jobs.is_saved` e le rotte `POST /saved`, `POST /saved/remove` alimentano `GET /saved` (pagina “Lavori salvati”). Il salvataggio è legato a `job_id` (chiave univoca) e non protegge dalla cancellazione: se la riconciliazione elimina l’annuncio dopo le assenze confermate, sparisce anche dai salvati.
+- Filtro “Ruolo” della WebGUI: il dropdown legge le keyword originali da `config.yaml` (`load_search_roles`); il match su `search_keywords` (accumulato) avviene via `instr(search_keywords, ?) > 0`, non per uguaglianza esatta.
 - Score CV: se nel titolo, descrizione, query di origine o funzione dell’annuncio compare `Azure` o `AWS`, il punteggio finale viene ridotto una sola volta del 40% (fattore `0,60`), anche se sono presenti entrambi i termini.
 - `POST /update`: avvia `run_daily.sh` in background e salva il PID del wrapper in `data/scraper.pid`.
 - Sia cron sia Update WebGUI usano `run_daily.sh`, che acquisisce `flock` su `data/scraper.lock`; quindi non possono eseguire scraping sovrapposti.

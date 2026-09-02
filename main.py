@@ -45,7 +45,13 @@ def load_config(path: str = "config.yaml") -> dict:
 
 
 def run_scraper(config: dict):
-    """Esegue il ciclo completo di scraping per ogni combinazione keyword×location."""
+    """Esegue il ciclo completo di scraping per ogni combinazione keyword×location.
+
+    L'identita' logica di un annuncio e' ``job_id`` (univoco): lo stesso annuncio
+    trovato da keyword diverse confluisce in un solo record con ``search_keywords``
+    accumulato.  La riconciliazione e' globale: un annuncio sparisce solo se non
+    e' trovato da NESSUNA query dopo ``absence_confirmation_runs`` run validi.
+    """
     scrape_cfg = config.get("scraping", {})
     db_cfg = config.get("database", {})
     export_cfg = config.get("export", {})
@@ -73,6 +79,9 @@ def run_scraper(config: dict):
     total_deleted = 0
     absence_confirmation_runs = scrape_cfg.get("absence_confirmation_runs", 2)
 
+    # seen_job_ids globale: unione di tutti gli scope con risultati affidabili.
+    all_seen_job_ids = set()
+
     for search in searches:
         keywords = search.get("keywords", "")
         locations = search.get("locations", [])
@@ -87,6 +96,7 @@ def run_scraper(config: dict):
                 # Gli ID grezzi, prima dei filtri, sono la fonte per la riconciliazione.
                 # Una ricerca senza card non elimina nulla: puo' essere un errore temporaneo/API.
                 seen_job_ids = {str(job.get("job_id", "")) for job in raw_jobs if job.get("job_id")}
+                all_seen_job_ids |= seen_job_ids
 
                 if not raw_jobs:
                     logger.info("Nessun risultato, salto")
@@ -125,14 +135,15 @@ def run_scraper(config: dict):
                 new_count, updated_count = db.upsert_jobs(filtered)
                 total_new += new_count
                 total_updated += updated_count
-                deleted_count = db.reconcile_search_scope(
-                    keywords, location, seen_job_ids, confirmation_runs=absence_confirmation_runs
-                )
-                total_deleted += deleted_count
-                logger.info("DB: %d nuovi, %d aggiornati, %d eliminati", new_count, updated_count, deleted_count)
+                logger.info("DB: %d nuovi, %d aggiornati", new_count, updated_count)
 
             except Exception as e:
                 logger.error("Errore su '%s'/'%s': %s", keywords, location, e, exc_info=True)
+
+    # Riconciliazione globale: un annuncio sparisce solo se non e' trovato da
+    # NESSUNA query del run corrente, dopo N assenze consecutive valide.
+    total_deleted = db.reconcile_global(all_seen_job_ids, confirmation_runs=absence_confirmation_runs)
+    logger.info("Riconciliazione globale: %d eliminati", total_deleted)
 
     # Snapshot unico del database al termine del run, anziché un file per query.
     all_jobs = db.get_all_jobs()

@@ -1,4 +1,11 @@
-"""Gestione database SQLite, deduplicazione e ciclo di vita degli annunci."""
+"""Gestione database SQLite, deduplicazione e ciclo di vita degli annunci.
+
+L'identita' logica di un annuncio e' ``job_id`` (univoco per annuncio LinkedIn).
+Lo stesso ``job_id`` trovato da query diverse (keyword diverse) confluisce in un
+solo record: ``search_keywords`` accumula le keyword che hanno trovato il job,
+separate da ``" | "``.  ``search_location`` e' sempre il paese di ricerca; se un
+futuro ``job_id`` apparisse in piu' paesi verrebbe anch'esso accumulato.
+"""
 
 import logging
 import sqlite3
@@ -9,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
-    job_id TEXT NOT NULL,
+    job_id TEXT NOT NULL PRIMARY KEY,
     title TEXT,
     company TEXT,
     location TEXT,
@@ -28,13 +35,14 @@ CREATE TABLE IF NOT EXISTS jobs (
     is_active INTEGER NOT NULL DEFAULT 1,
     is_new INTEGER NOT NULL DEFAULT 1,
     missing_runs INTEGER NOT NULL DEFAULT 0,
-    is_saved INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (job_id, search_keywords, search_location)
+    is_saved INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company);
 CREATE INDEX IF NOT EXISTS idx_jobs_title ON jobs(title);
 CREATE INDEX IF NOT EXISTS idx_jobs_posted ON jobs(posted_at);
+CREATE INDEX IF NOT EXISTS idx_jobs_keywords ON jobs(search_keywords);
+CREATE INDEX IF NOT EXISTS idx_jobs_location ON jobs(search_location);
 """
 
 # Migration for databases created before availability/new-state tracking existed.
@@ -44,6 +52,16 @@ MIGRATION_COLUMNS = {
     "missing_runs": "INTEGER NOT NULL DEFAULT 0",
     "is_saved": "INTEGER NOT NULL DEFAULT 0",
 }
+
+KEYWORD_SEPARATOR = " | "
+
+
+def _merge_values(existing: str, new: str) -> str:
+    """Accumula ``new`` in ``existing`` (separatore ``" | "``) se non gia' presente."""
+    parts = [p.strip() for p in (existing or "").split(KEYWORD_SEPARATOR) if p.strip()]
+    if new and new not in parts:
+        parts.append(new)
+    return KEYWORD_SEPARATOR.join(parts)
 
 
 class JobDatabase:
@@ -95,7 +113,12 @@ class JobDatabase:
         }
 
     def upsert_jobs(self, jobs):
-        """Salva una lista; nuovi record ricevono il tag ``is_new``, gli altri lo perdono."""
+        """Salva una lista; nuovi record ricevono il tag ``is_new``, gli altri lo perdono.
+
+        Lo stesso ``job_id`` trovato da keyword diverse confluisce in un solo
+        record: ``search_keywords`` (e ``search_location`` se diverso) viene
+        accumulato con separatore ``" | "``.
+        """
         if not jobs:
             return 0, 0
         now = datetime.utcnow().isoformat()
@@ -110,53 +133,63 @@ class JobDatabase:
                 :job_id, :title, :company, :location, :url, :posted_at, :description,
                 :seniority_level, :employment_type, :job_function, :industry, :salary,
                 :search_keywords, :search_location, :first_seen, :last_seen, 1, 1, 0
-            ) ON CONFLICT(job_id, search_keywords, search_location) DO UPDATE SET
+            ) ON CONFLICT(job_id) DO UPDATE SET
                 last_seen = excluded.last_seen, title = excluded.title, company = excluded.company,
                 location = excluded.location, url = excluded.url, posted_at = excluded.posted_at,
                 description = excluded.description, salary = excluded.salary,
                 seniority_level = excluded.seniority_level, employment_type = excluded.employment_type,
                 job_function = excluded.job_function, industry = excluded.industry,
+                search_keywords = excluded.search_keywords, search_location = excluded.search_location,
                 is_active = 1, is_new = 0, missing_runs = 0
         """
         with self._get_conn() as conn:
             for job in jobs:
-                key = (job.get("job_id", ""), job.get("search_keywords", ""), job.get("search_location", ""))
+                job_id = job.get("job_id", "")
+                if not job_id:
+                    continue
                 exists = conn.execute(
-                    "SELECT 1 FROM jobs WHERE job_id = ? AND search_keywords = ? AND search_location = ?", key
+                    "SELECT search_keywords, search_location FROM jobs WHERE job_id = ?", (job_id,)
                 ).fetchone() is not None
-                conn.execute(sql, self._params(job, now))
                 if exists:
+                    row = conn.execute(
+                        "SELECT search_keywords, search_location FROM jobs WHERE job_id = ?", (job_id,)
+                    ).fetchone()
+                    job = {
+                        **job,
+                        "search_keywords": _merge_values(row["search_keywords"], job.get("search_keywords", "")),
+                        "search_location": _merge_values(row["search_location"], job.get("search_location", "")),
+                    }
                     updated_count += 1
                 else:
                     new_count += 1
+                conn.execute(sql, self._params(job, now))
         logger.info("DB: %d nuovi, %d aggiornati", new_count, updated_count)
         return new_count, updated_count
 
-    def reconcile_search_scope(self, search_keywords, search_location, seen_job_ids, confirmation_runs=2):
-        """Elimina gli annunci assenti dopo N ricerche valide consecutive nello scope.
+    def reconcile_global(self, seen_job_ids, confirmation_runs=2):
+        """Elimina gli annunci non trovati da NESSUNA query dopo N run validi consecutivi.
 
-        Non va chiamato quando la ricerca fallisce o restituisce zero card: in quei casi
-        l'assenza non e' una prova affidabile che l'annuncio sia stato rimosso.
+        A differenza della riconciliazione per-scope (deprecata), un annuncio
+        resta finche' e' trovato da almeno una query del run corrente.
+        Non va chiamata quando il run non ha prodotti affidabili (seen vuoto).
         """
         if not seen_job_ids:
-            logger.info("Riconciliazione %r/%r saltata: nessun risultato affidabile", search_keywords, search_location)
+            logger.info("Riconciliazione globale saltata: nessun risultato affidabile")
             return 0
         confirmation_runs = max(int(confirmation_runs), 1)
         placeholders = ", ".join("?" for _ in seen_job_ids)
-        base = [search_keywords, search_location, *seen_job_ids]
-        missing_where = (
-            "search_keywords = ? AND search_location = ? "
-            f"AND job_id NOT IN ({placeholders})"
-        )
         with self._get_conn() as conn:
-            conn.execute(f"UPDATE jobs SET missing_runs = missing_runs + 1 WHERE {missing_where}", base)
+            conn.execute(
+                f"UPDATE jobs SET missing_runs = missing_runs + 1 "
+                f"WHERE job_id NOT IN ({placeholders})",
+                list(seen_job_ids),
+            )
             cursor = conn.execute(
-                f"DELETE FROM jobs WHERE {missing_where} AND missing_runs >= ?",
-                [*base, confirmation_runs],
+                "DELETE FROM jobs WHERE missing_runs >= ?", (confirmation_runs,)
             )
             deleted = cursor.rowcount
         if deleted:
-            logger.info("Eliminati %d annunci non piu' presenti per %r/%r", deleted, search_keywords, search_location)
+            logger.info("Eliminati %d annunci non piu' presenti (riconciliazione globale)", deleted)
         return deleted
 
     def get_all_jobs(self, limit=None):
@@ -175,9 +208,9 @@ class JobDatabase:
             rows = conn.execute("SELECT * FROM jobs WHERE first_seen >= ? ORDER BY first_seen DESC", (since_date,)).fetchall()
             return [dict(r) for r in rows]
 
-    def get_job(self, job_id, search_keywords, search_location):
+    def get_job(self, job_id):
         with self._get_conn() as conn:
-            row = conn.execute("SELECT * FROM jobs WHERE job_id = ? AND search_keywords = ? AND search_location = ?", (job_id, search_keywords, search_location)).fetchone()
+            row = conn.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
             return dict(row) if row else None
 
     def get_stats(self):
