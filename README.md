@@ -12,7 +12,7 @@ Usa la **Guest API di LinkedIn**: nessun account o login richiesto, nessuna cred
 - **Normalizzazione e merge** dei dettagli annuncio (`scraper/parser.py`), filtri keyword e **deduplica** (`scraper/filters.py`).
 - **Storage SQLite** (`storage/database.py`): schema versionato, upsert, snapshot CSV completo a fine run (`storage/exporter.py`).
 - **Ciclo di vita degli annunci**: un nuovo annuncio entra con badge **Nuovo** (`is_new=1`) e lo perde al ritrovamento successivo; dopo `scraping.absence_confirmation_runs` (default `2`) assenze consecutive valide viene **eliminato fisicamente** dal DB. Le ricerche fallite o rate-limited **non** incrementano le assenze.
-- **Identità logica**: ogni annuncio è identificato da `(job_id, search_keywords, search_location)`: lo stesso job trovato da query diverse genera record distinti.
+- **Identità logica**: ogni annuncio è identificato da `job_id` (univoco per annuncio LinkedIn): lo stesso job trovato da query diverse confluisce in **un solo record**; `search_keywords` e `search_location` accumulano le origini multiple (separate da ` | `).
 - **WebGUI Flask** (`webapp/`): filtri, paginazione, ordinamento, **score CV** automatico, pagina "Lavori salvati" e avvio scraping in background con lock anti-sovrapposizione (`flock`).
 - **Notifier** (`notifier/`).
 - **Scheduling**: wrapper `run_daily.sh` pensato per cron, con `flock` che impedisce run sovrapposti (cron o WebGUI non possono eseguire insieme).

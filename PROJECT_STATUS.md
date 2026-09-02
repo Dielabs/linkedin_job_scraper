@@ -16,6 +16,20 @@ Scraper Python di annunci LinkedIn per ruoli Infrastructure / AI / Datacenter / 
 - Prima di una modifica: leggere i file coinvolti, effettuare backup dei file modificati, cambiare il minimo necessario e verificare sintassi/test pertinenti. Non eseguire scraping completo o riavviare/fermare processi senza necessità esplicita.
 - Non modificare né cancellare `data/jobs.db`, export o log, salvo richiesta esplicita dell'utente.
 
+## Repository Git e deploy
+
+- **Repo Git**: \`/home/dcserver/linkedin_job_scraper\` (remote: \`origin = https://github.com/Dielabs/linkedin_job_scraper.git\`).
+- **Deploy**: \`/opt/linkedin_job_scraper\` — **non è un repo Git**; è la copia di esecuzione (venv, data, config, servizi).
+- I file sorgente del deploy e del repo coincidono; le differenze attese sono solo i file \`.bak\` di backup (presenti in \`/opt\`, **non** committare) e \`.gitignore\`/\`README.md\` (presenti solo nel repo).
+- **Procedura di commit/push dopo modifiche al deploy**:
+  1. Verificare il working tree: \`cd /home/dcserver/linkedin_job_scraper && git status --short\`.
+  2. Confrontare deploy vs repo: \`diff -rq /opt/linkedin_job_scraper /home/dcserver/linkedin_job_scraper --exclude=.git --exclude=venv --exclude=data --exclude=__pycache__\`.
+  3. Copiare i file modificati dal deploy al repo (es.: \`cp /opt/linkedin_job_scraper/<file> /home/dcserver/linkedin_job_scraper/<file>\`).
+  4. \`git add\` dei soli file sorgente (mai \`.bak\`, \`venv/\`, \`data/\`).
+  5. \`git commit -m "descrizione"\` e \`git push origin main\`.
+  6. Verificare allineamento: \`git fetch origin && git log --oneline origin/main..main && git log --oneline main..origin/main\` (entrambi vuoti = allineati).
+- **Regola di deduplica** (commit \`4b8519e\`): un unico record per \`job_id\`, anche se l annuncio matcha più keyword o location; \`search_keywords\` e \`search_location\` accumulano le origini multiple (separate da \` | \`).
+
 ## Architettura
 
 ```text
