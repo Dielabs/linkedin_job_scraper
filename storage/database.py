@@ -35,7 +35,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     is_active INTEGER NOT NULL DEFAULT 1,
     is_new INTEGER NOT NULL DEFAULT 1,
     missing_runs INTEGER NOT NULL DEFAULT 0,
-    is_saved INTEGER NOT NULL DEFAULT 0
+    is_saved INTEGER NOT NULL DEFAULT 0,
+    is_viewed INTEGER NOT NULL DEFAULT 0,
+    viewed_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company);
@@ -51,6 +53,8 @@ MIGRATION_COLUMNS = {
     "is_new": "INTEGER NOT NULL DEFAULT 0",
     "missing_runs": "INTEGER NOT NULL DEFAULT 0",
     "is_saved": "INTEGER NOT NULL DEFAULT 0",
+    "is_viewed": "INTEGER NOT NULL DEFAULT 0",
+    "viewed_at": "TEXT",
 }
 
 KEYWORD_SEPARATOR = " | "
@@ -94,6 +98,7 @@ class JobDatabase:
                     conn.execute(f"ALTER TABLE jobs ADD COLUMN {column} {definition}")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(is_active, is_new, last_seen)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_saved ON jobs(is_saved, last_seen)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_viewed ON jobs(is_viewed)")
         logger.info("Database inizializzato: %s", self.db_path)
 
     @staticmethod

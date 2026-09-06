@@ -6,7 +6,7 @@ import os
 import sqlite3
 import subprocess
 from collections import Counter
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -175,6 +175,24 @@ def remove_saved_job():
 
 
 
+@app.post("/view")
+def view_job():
+    """Mark a job as viewed (clicked) by the user; called via JS fetch."""
+    job_id = job_id_from_form()
+    if job_id is None:
+        return ("", 204)
+    try:
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE jobs SET is_viewed = 1, viewed_at = ? WHERE job_id = ?",
+                (datetime.utcnow().isoformat(), job_id),
+            )
+            conn.commit()
+    except sqlite3.Error:
+        pass
+    return ("", 204)
+
+
 def db_where(filters: dict) -> tuple[str, list[str]]:
     clauses, params = [], []
     if filters["q"]:
@@ -197,6 +215,10 @@ def db_where(filters: dict) -> tuple[str, list[str]]:
         params.append(filters["country"])
     if filters["status"] == "new":
         clauses.append("is_new = 1")
+    elif filters["status"] == "viewed":
+        clauses.append("is_viewed = 1")
+    elif filters["status"] == "not_viewed":
+        clauses.append("is_viewed = 0")
     date_column = {"first_seen": "first_seen", "last_seen": "last_seen", "posted_at": "posted_at"}[filters["date_field"]]
     if filters["date_from"]:
         clauses.append(f"substr(COALESCE({date_column}, ''), 1, 10) >= ?")
@@ -217,7 +239,7 @@ def build_filters() -> dict:
         "exclude_keywords": split_keywords(request.args.get("exclude", "")),
         "role": request.args.get("role", "").strip(),
         "country": request.args.get("country", "").strip() if request.args.get("country", "") in {"Italy", "Switzerland", "Luxembourg"} else "",
-        "status": request.args.get("status", "all") if request.args.get("status", "all") in {"all", "new"} else "all",
+        "status": request.args.get("status", "all") if request.args.get("status", "all") in {"all", "new", "viewed", "not_viewed"} else "all",
         "date_field": date_field if date_field in {"first_seen", "last_seen", "posted_at"} else "first_seen",
         "date_from": valid_date(request.args.get("date_from", "")),
         "date_to": valid_date(request.args.get("date_to", "")),
@@ -256,6 +278,7 @@ def index():
     for row in rows:
         job = dict(row)
         job["is_new"] = bool(job["is_new"])
+        job["is_viewed"] = bool(job.get("is_viewed", 0))
         job["match_score"], job["match_areas"] = score_job(job)
         job["valid_url"] = is_valid_linkedin_url(job.get("url"))
         jobs.append(job)
@@ -296,6 +319,7 @@ def saved_jobs():
     for row in rows:
         job = dict(row)
         job["is_new"] = bool(job["is_new"])
+        job["is_viewed"] = bool(job.get("is_viewed", 0))
         job["match_score"], job["match_areas"] = score_job(job)
         job["valid_url"] = is_valid_linkedin_url(job.get("url"))
         jobs.append(job)
