@@ -3,42 +3,52 @@ searches:
   locations:
   - Italy
   - Piedmont, Italy
+  - Remote, Italy
 - keywords: AI Solutions Architect
   locations:
   - Italy
   - Piedmont, Italy
+  - Remote, Italy
 - keywords: LLM Infrastructure Engineer
   locations:
   - Italy
   - Piedmont, Italy
+  - Remote, Italy
 - keywords: Inference Engineer
   locations:
   - Italy
   - Piedmont, Italy
+  - Remote, Italy
 - keywords: Datacenter Architect
   locations:
   - Italy
   - Piedmont, Italy
+  - Remote, Italy
 - keywords: Cloud Infrastructure Architect
   locations:
   - Italy
   - Piedmont, Italy
+  - Remote, Italy
 - keywords: Technical Presales Engineer
   locations:
   - Italy
   - Piedmont, Italy
+  - Remote, Italy
 - keywords: Solutions Architect (Datacenter / Hybrid Cloud)
   locations:
   - Italy
   - Piedmont, Italy
+  - Remote, Italy
 - keywords: Responsabile IT
   locations:
   - Italy
   - Piedmont, Italy
+  - Remote, Italy
 - keywords: IT Manager
   locations:
   - Italy
   - Piedmont, Italy
+  - Remote, Italy
 scraping:
   results_per_query: 25
   delay_min_seconds: 5
