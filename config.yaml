@@ -2,53 +2,43 @@ searches:
 - keywords: AI Infrastructure Engineer
   locations:
   - Italy
-  - Switzerland
-  - Luxembourg
+  - Piedmont, Italy
 - keywords: AI Solutions Architect
   locations:
   - Italy
-  - Switzerland
-  - Luxembourg
+  - Piedmont, Italy
 - keywords: LLM Infrastructure Engineer
   locations:
   - Italy
-  - Switzerland
-  - Luxembourg
+  - Piedmont, Italy
 - keywords: Inference Engineer
   locations:
   - Italy
-  - Switzerland
-  - Luxembourg
+  - Piedmont, Italy
 - keywords: Datacenter Architect
   locations:
   - Italy
-  - Switzerland
-  - Luxembourg
+  - Piedmont, Italy
 - keywords: Cloud Infrastructure Architect
   locations:
   - Italy
-  - Switzerland
-  - Luxembourg
+  - Piedmont, Italy
 - keywords: Technical Presales Engineer
   locations:
   - Italy
-  - Switzerland
-  - Luxembourg
+  - Piedmont, Italy
 - keywords: Solutions Architect (Datacenter / Hybrid Cloud)
   locations:
   - Italy
-  - Switzerland
-  - Luxembourg
+  - Piedmont, Italy
 - keywords: Responsabile IT
   locations:
   - Italy
-  - Switzerland
-  - Luxembourg
+  - Piedmont, Italy
 - keywords: IT Manager
   locations:
   - Italy
-  - Switzerland
-  - Luxembourg
+  - Piedmont, Italy
 scraping:
   results_per_query: 25
   delay_min_seconds: 5
