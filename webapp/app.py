@@ -55,6 +55,20 @@ def scraper_running() -> bool:
     try:
         pid = int(SCRAPER_PID_PATH.read_text().strip())
         os.kill(pid, 0)
+        # os.kill succeeds even for zombie (defunct) processes, which are
+        # already dead but not yet reaped by the parent.  Detect them via
+        # /proc/<pid>/status so the UI does not stay stuck on "updating".
+        try:
+            with open(f"/proc/{pid}/status") as st:
+                if "\nState:\tZ" in st.read():
+                    try:
+                        os.waitpid(pid, os.WNOHANG)
+                    except (OSError, ChildProcessError):
+                        pass
+                    SCRAPER_PID_PATH.unlink(missing_ok=True)
+                    return lock_is_held()
+        except (FileNotFoundError, PermissionError):
+            pass
         return True
     except (FileNotFoundError, ValueError, ProcessLookupError, PermissionError):
         SCRAPER_PID_PATH.unlink(missing_ok=True)
