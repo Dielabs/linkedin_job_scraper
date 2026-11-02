@@ -54,7 +54,7 @@ PROFILE_AREAS = (
     ("AI / LLM inference", 30, (
         "llm", "inference", "vllm", "llm serving", "generative ai", "genai",
         "gpu", "cuda", "nvidia", "machine learning infrastructure", "ai infrastructure",
-        "prometheus", "grafana", "observability", "benchmark",
+        "prometheus", "grafana", "benchmark",
     )),
     ("Datacenter e cloud ibrido", 25, (
         "datacenter", "data center", "private cloud", "hybrid cloud", "neocloud",
@@ -66,12 +66,14 @@ PROFILE_AREAS = (
         "pre-sales", "rfp", "rfi", "rfq", "sizing", "capacity planning", "architect",
     )),
     ("Infrastructure / platform engineering", 15, (
-        "devops", "docker", "kubernetes", "linux", "network", "nsx", "automation",
+        "devops", "docker", "kubernetes", "linux", "nsx", "automation",
         "system engineer", "infrastructure engineer", "platform engineer",
+        "networking", "network infrastructure", "network engineer", "network security",
+        "observability",
     )),
     ("Responsabilità IT", 10, (
         "it manager", "responsabile it", "head of it", "it director", "it operations manager",
-        "service delivery manager", "team lead", "leadership",
+        "service delivery manager", "team lead",
     )),
 )
 
@@ -136,7 +138,7 @@ def score_job(job: dict) -> tuple[int, list[str]]:
             matched.append(label)
             if title_hit:
                 total += 2
-    if any(term in title for term in ("junior", "intern", "stage", "apprentice", "graduate")):
+    if any(has_term(title, term) for term in ("junior", "intern", "stage", "apprentice", "graduate")):
         total -= 15
     total = max(0, min(100, total))
     desc_norm = normalize(str(job.get("description") or ""))
