@@ -89,6 +89,37 @@ searches:
   locations:
   - Italy
   - Piedmont, Italy
+- keywords: Solution Architect
+  locations:
+  - Italy
+  - Piedmont, Italy
+  - Remote, Italy
+- keywords: Infrastructure Architect
+  locations:
+  - Italy
+  - Piedmont, Italy
+  - Remote, Italy
+- keywords: Pre-Sales Engineer
+  locations:
+  - Italy
+  - Piedmont, Italy
+  - Remote, Italy
+- keywords: Solutions Consultant
+  locations:
+  - Italy
+  - Piedmont, Italy
+- keywords: VMware Engineer
+  locations:
+  - Italy
+  - Piedmont, Italy
+- keywords: Virtualization Engineer
+  locations:
+  - Italy
+  - Piedmont, Italy
+- keywords: VMware Architect
+  locations:
+  - Italy
+  - Piedmont, Italy
 scraping:
   results_per_query: 25
   delay_min_seconds: 5
