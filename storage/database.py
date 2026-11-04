@@ -3,8 +3,11 @@
 L'identita' logica di un annuncio e' ``job_id`` (univoco per annuncio LinkedIn).
 Lo stesso ``job_id`` trovato da query diverse (keyword diverse) confluisce in un
 solo record: ``search_keywords`` accumula le keyword che hanno trovato il job,
-separate da ``" | "``.  ``search_location`` e' sempre il paese di ricerca; se un
-futuro ``job_id`` apparisse in piu' paesi verrebbe anch'esso accumulato.
+separate da ``" | "``.  ``search_location`` accumula le location di ricerca
+validate (``scraper.parser.validate_search_location``): se la regione della
+query non e' coerente con la location reale dell'annuncio (es. ``"Piedmont,
+Italy"`` per un job a Milano), si fa fallback al paese generico (``"Italy"``).
+Se un futuro ``job_id`` apparisse in piu' paesi verrebbe anch'esso accumulato.
 """
 
 import logging
