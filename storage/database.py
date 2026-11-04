@@ -120,6 +120,23 @@ class JobDatabase:
             "first_seen": now, "last_seen": now,
         }
 
+
+    def clear_new_flag(self):
+        """Azzerare is_new di tutti i record esistenti all'inizio di un run.
+
+        I nuovi record inseriti nel run corrente riceveranno is_new = 1
+        dall'INSERT; i record pre-esistenti aggiornati (ON CONFLICT) manterranno
+        is_new = 0.  In questo modo un annuncio trovato da piu' query nello
+        stesso run non perde il tag is_new, coerentemente con il requisito
+        che il tag venga rimosso solo in un run **successivo**.
+        """
+        with self._get_conn() as conn:
+            cursor = conn.execute("UPDATE jobs SET is_new = 0 WHERE is_new = 1")
+            cleared = cursor.rowcount
+        if cleared:
+            logger.info("Reset is_new: %d record non piu' 'nuovi'", cleared)
+        return cleared
+
     def upsert_jobs(self, jobs):
         """Salva una lista; nuovi record ricevono il tag ``is_new``, gli altri lo perdono.
 
@@ -148,7 +165,7 @@ class JobDatabase:
                 seniority_level = excluded.seniority_level, employment_type = excluded.employment_type,
                 job_function = excluded.job_function, industry = excluded.industry,
                 search_keywords = excluded.search_keywords, search_location = excluded.search_location,
-                is_active = 1, is_new = 0, missing_runs = 0
+                is_active = 1, is_new = is_new, missing_runs = 0
         """
         with self._get_conn() as conn:
             for job in jobs:

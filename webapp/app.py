@@ -318,7 +318,7 @@ def index():
         total_db=total_db, filtered_total=filtered_total, countries=countries,
         page=page, per_page=per_page, total_pages=total_pages, page_url=page_url,
         database_path=app.config["DATABASE_PATH"], scraper_running=scraper_running(),
-        new_total=new_count)
+        new_total=new_count, today=date.today().isoformat())
 
 
 @app.route("/saved")

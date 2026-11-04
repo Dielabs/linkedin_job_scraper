@@ -69,6 +69,12 @@ def run_scraper(config: dict):
         os.makedirs(db_directory, exist_ok=True)
     db = JobDatabase(db_path=db_path)
 
+    # Azzerare il flag is_new di tutti i record pre-esistenti: i nuovi record
+    # inseriti in questo run riceveranno is_new=1 dall'INSERT; gli aggiornati
+    # manterranno is_new=0. Cosi' un annuncio trovato da piu' query nello stesso
+    # run non perde il tag, coerentemente con il requisito del ciclo di vita.
+    db.clear_new_flag()
+
     max_results = scrape_cfg.get("results_per_query", 50)
     searches = config.get("searches", [])
 
